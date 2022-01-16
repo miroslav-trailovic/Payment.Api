@@ -1,12 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Payment.Api.Data;
-using Payment.Api.Models;
+using Payment.Api.Helpers;
+using Payment.Api.Services;
 using Payment.Api.ViewModels;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,12 +14,12 @@ namespace Payment.Api.Controllers
     public class PaymentController : ControllerBase
     {
         private readonly ILogger<PaymentController> _logger;
-        private readonly PaymentContext _dbContext;
+        private readonly IPaymentService _paymentService;
 
-        public PaymentController(ILogger<PaymentController> logger, PaymentContext dbContext)
+        public PaymentController(ILogger<PaymentController> logger, IPaymentService paymentService)
         {
             _logger = logger;
-            _dbContext = dbContext;
+            _paymentService = paymentService;
         }
 
         [HttpPost]
@@ -30,21 +27,14 @@ namespace Payment.Api.Controllers
         {
             try
             {
-                var paymentToAdd = new PaymentModel
-                {
-                    CreationDate = paymentPost.CreationDate,
-                    Amount = paymentPost.Amount,
-                    CurrencyCode = paymentPost.CurrencyCode,
-                    Status = paymentPost.Status,
-                    Order = new OrderModel
-                    {
-                        ConsumerFullName = paymentPost.ConsumerFullName,
-                        ConsumerAddress = paymentPost.ConsumerAddress
-                    }
-                };
+                var isValid = RequestModelValidator.Validate(paymentPost);
 
-                await _dbContext.Payments.AddAsync(paymentToAdd, cancellationToken);
-                await _dbContext.SaveChangesAsync();
+                if (!isValid)
+                {
+                    return BadRequest("Please correct the input data.");
+                }
+
+                var paymentToAdd = await _paymentService.CreatePayment(paymentPost, cancellationToken);
 
                 return Created($"payment/{paymentToAdd.PaymentId}", paymentToAdd);
             }
@@ -57,12 +47,16 @@ namespace Payment.Api.Controllers
         }
 
         [HttpGet("{paymentId:int}")]
-        public async Task<IActionResult> GetPaymentByPaymentId([FromRoute] int paymentId)
+        public async Task<IActionResult> GetPayment([FromRoute] int paymentId)
         {
             try
             {
-                var payment = await Task.Run(() => _dbContext.Payments.Include(p => p.Order)
-                    .FirstOrDefault(e => e.PaymentId == paymentId));
+                var payment = await _paymentService.GetPaymentByPaymentId(paymentId);
+
+                if (payment == null)
+                {
+                    return NotFound("Payment doesn't exist.");
+                }
 
                 return Ok(payment);
             }
