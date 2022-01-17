@@ -2,7 +2,7 @@
 {
     public class CreatePaymentViewModel
     {
-        public uint Amount { get; set; }
+        public decimal Amount { get; set; }
         public string CurrencyCode { get; set; }
         public string Status { get; set; }
         public string ConsumerFullName { get; set; }
